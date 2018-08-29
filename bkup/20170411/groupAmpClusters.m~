@@ -1,0 +1,34 @@
+% For an entire group, do amplitudes cluster according to perceptual report? 
+% (Dominant vs. Mixed vs. Suppressed?)
+
+% load parameters
+groupAnalysisParams
+
+for iGroup = 1:length(groupParNums)
+    
+    % space to store group amplitudes corresponding to each percept
+    hMixedG = [];
+    hCorrG = []; % corresponding percept (high frequency if its the high frequency trace)
+    hOppG = []; % opposite percept (low frequency of its the high frequency trace)
+    lMixedG = [];
+    lCorrG = [];
+    lOppG = [];
+    
+    for parNum = groupParNums{iGroup}
+        numFormat = '%02d';
+        parName = [groupCodes{iGroup} num2str(parNum, numFormat)];
+        
+        % load amplitudes
+        if exist(['ampClusters/' parName '.mat'], 'file')
+            load(['ampClusters/' parName '.mat'])
+        else
+            continue;
+        end
+        
+        % collect amplitudes
+        hMixedG = [hMixedG hMixedAmps];
+        hCorrG = [hCorrG hCorrAmps];
+        hOppG = [hOppG hOppAmps];
+        
+    end
+end

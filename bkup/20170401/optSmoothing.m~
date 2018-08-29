@@ -1,0 +1,24 @@
+% Find the optimal smoothing kernel for OscFreq vs. numSwitches correlation
+
+clearvars
+
+%global kSize
+global pValues
+global cutOff
+
+pValues = [];
+%for Kernelsize = 0:200:2000
+for cutOff = 0.3:0.05:0.8
+    %kSize = Kernelsize + 1;
+    analysisController
+    indexAnal2
+    pValues = [pValues P(5,32)];   
+end
+
+sizes = 0:200:2000;
+figure
+plot(sizes, pValues, 'ko');
+%xlabel('kernel length (data points)')
+xlabel('filter cut-off (data points)')
+ylabel('OscFreq vs. numSwitches p value')
+title('Effect of smoothing on correlation: Stratus')

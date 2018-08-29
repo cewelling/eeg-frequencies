@@ -1,0 +1,7 @@
+1 'check' 28 28 
+2 'broc' 28 28
+3 'check' 42.5 42.5 
+4 'rival' 21 28
+5 'rival-inverted' 21 28
+6 'rival-inverted' 28 2
+7 'rival-iverted' 21 17

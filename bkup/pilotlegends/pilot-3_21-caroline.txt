@@ -1,0 +1,7 @@
+1 ‘1frameflick-rival’ 17 21.25 5 30
+2 ‘2frameflick-rival’ 17 21.25 5 30
+3 ‘2frameflick-simulation’ 17 21.25 5 30
+4 ‘2frameflick-rival-blue’ 17 21.25 5 30
+5 ‘2frameflick-rival-newfreq’ 14.16 17 5 30
+6 ‘2frameflick-rival-gabors’ 17 21.25 5 30
+7 ‘2frameflick-rival-newfreq’ 14.16 17 5 30

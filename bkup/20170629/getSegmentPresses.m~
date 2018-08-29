@@ -1,0 +1,40 @@
+function [ segPressMat ] = getSegPresses( parName, runName, tTrialVect, tPointVect)
+%UNTITLED Summary of this function goes here
+%   Outputs a matrix of button presses corresponding to the designated transitions
+% Each row is a transition, each column is a time point within the
+% transition (transition happens at time 0)
+
+% load parameters
+analysisParams
+
+% load epochs
+load(['epochs/' parName '_' runName '.mat'])
+% remember that tPoints have been shifted by 1 second, but epochs haven't **
+
+% time matrix for transitions
+tRange = -transHalf:1/sampRate:transHalf;
+tPoints = repMat(tPointVect,1,size(tRange, 2));
+tRanges = repMat(tRange, size(tPoints, 1), 1));
+tTimeMat = tPoints + tRanges;
+
+% account for this: tPoints have been shifted by 1 second, but epochs haven't **
+tTimeMat = tTimeMat + 1;
+
+% space to store button press information
+segPressMat = nan(size(tTimeMat, 1), size(tTimeMat, 2));
+
+% iterate through epochs, identify time points that correspond to epochs
+for thisTrial = min(epochs(:,1)):max(epochs(:,1))
+    trialEpochs = epochs(epochs(:,1) == thisTrial,:);
+    trialTimes = tTimeMat(tTrialVect == thisTrial,:);
+    
+    % space to store button press information
+    trialPressMat = nan(size(trialTimes, 1), size(trialTimes, 2));
+    
+    for iEpoch = 1:size(trialEpochs,1)
+        trialPressMat(trialTimes < epochs(iEpoch,2) & trialTimes > epochs(iEpoch, 3));
+    end
+end
+
+end
+

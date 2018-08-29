@@ -1,0 +1,304 @@
+% -------------------------------------------------------------------------
+% analysisParams.m
+% description: parameters for SSVEP binocular rivalry anlysis
+% Use with: analysisController.m, runFFT.m
+% -------------------------------------------------------------------------
+
+%% Plot settings-----------------------------------------------------------
+
+FFTplotOrNot = 'no'; %FFT data
+RLSplotOrNot = 'no'; %timecourses of RLS data
+transPlotOrNot = 'no'; % transitions for each run
+PkPlotOrNot = 'no'; % peaks overlayed on RLS spectra
+avgPksPlotOrNot = 'no'; % peaks for each run
+parPlotOrNot = 'no'; %individual transition plot
+clustPlotOrNot = 'yes'; % amplitude clustering segment plots
+clustSegPlotOrNot = 'no'; % plot RLS trace with clustering segs overlaid
+segPlotOrNot = 'no'; % plots of machine learning trials
+
+% plotting properties
+setFigProps
+
+color3 = [0.15 0.15 0.15];
+colorA = [110 22 48]/255;
+colorC = [10 77 97]/255;
+
+%% Directories-------------------------------------------------------------
+
+% Location of Raw Data
+if exist('../../runScripts/rawData', 'dir')
+    eegDir = '../../runScripts/rawData/EEG/';
+    keyPressDir = '../../runScripts/rawData/Behavior/';
+else
+    error('please provide directory where raw data is stored');
+end
+
+% Location of Analysis Results
+indicesDir = ['./indices/'];
+plotDir = './plots/';
+fftSpectPlotDir = './plots/FFTspect/';
+transPlotDir = './plots/transitions/';
+blineDir = '.pre-processing/baselineTest/';
+
+% Date format in file names
+dateFormat = 'yyyy-mm-dd';
+
+%% General parameters------------------------------------------------------
+
+% Select group / participants
+group = 1; %0 controls, 1 for asc
+if group == 0
+    parNums = [105:140]; % ex/ Stratus100's parNum is 100 %Note, CER = 137
+    group = 'stratus'; % 'stratus' or 'cumulus'
+    % exclude participants
+    load('pre-processing/stratExcluded.mat')
+    parNums = setdiff(parNums,stratExcluded);
+else
+    parNums = [1:28]; % ex/ Stratus100's parNum is 100
+    group = 'cumulus'; % 'stratus' or 'cumulus'
+    % exclude participants
+    load('pre-processing/cumExcluded.mat')
+    parNums = setdiff(parNums,cumExcluded);
+end
+
+% Select runs
+runTypes = {'dartRival' 'dartSim'}; %'dartSim', 'marzRival'
+runIndices = [1:3]; % generally 1:3
+
+% Define frequencies
+stimFreqs = [5.666 8.5]; % hz
+harFreqs = [2*stimFreqs(1) 2*stimFreqs(2)]; % harmonics
+imFreqs = [2*stimFreqs(2) - stimFreqs(1) stimFreqs(1) + stimFreqs(2)]; % intermodulation frequencies
+
+% Define frequency labels
+stimFreqLabel = 'principles';
+harFreqLabel = 'harmonics';
+analFreqLabel = 'im';
+
+% Define electrode sets
+occipitals = struct('nums', [20 26 27 28 29 30 31], 'name', 'occipitals');
+focusElectrode = struct('nums', 29, 'name', 'Oz');
+focusElectrodes = struct('nums', [20 29], 'name', 'Oz and POz');
+allElectrodes = struct('nums', 1:32, 'name', 'allElectrodes');
+mastoids = struct('nums', 65, 'name', 'mastoids');
+custom = struct('nums', [1:10], 'name', '1-10');
+
+% EEG run settings
+numTrials = 6; % per run
+trialDur = 30; % in seconds
+minTrials = 6; % total number of trials needed to be included in analyses
+sampRate = 512; % EEG sample rate (per second)
+
+% General RLS settings
+cutoffWindow = 1000; % in ms, time to cut off beginning of RLS trace to discard stimulus onset
+% For when we smooth,
+smooth_ksize = 1225; % kernel size, must be an odd integer
+smooth_sd = 1; %std is expressed as a fraction of (smooth_ksize + 1) /2
+% For smoothing we use Haoran's scripts (modified to accomodate just a vector of data,
+% rather than any 2 dimensional matrix)
+
+% SNR parameters
+noiseWindowHalves = [15]; % in freq bins for SNR calculation--1 Hz = 30 bins
+minSNR = 2;
+
+% Keypress analysis parameters
+upArrow = 104;
+leftArrow = 100;
+rightArrow = 102;
+
+%For simulation schedule
+leftCue = 1;
+rightCue = 2;
+
+minEpochDur = 0.5; %0.5; % in seconds
+
+
+%% Specific Parameters-----------------------------------------------------
+
+if strcmp(paramsFlag, 'fftAnal')
+    
+    %% FFT plot parameters
+    
+    % Choose electrodes to analyze:
+    electrodeSet = occipitals; %focusElectrode; %occipitals;
+    snrElecs = focusElectrode.nums; % electrodes used for SNR exclusion purposes
+    
+    % Choose frequencies to analyze:
+    analFreqs = stimFreqs; % stimFreqs; % harFreqs; % imFreqs
+    analFreqLabel = stimFreqLabel;
+    
+elseif strcmp(paramsFlag, 'rlsAnal')
+    
+    %% RLS plot parameters
+    
+    % Choose electrodes to analyze:
+    electrodeSet = focusElectrode; %focusElectrode; %occipitals;
+    snrElecs = focusElectrode.nums; % electrodes used for SNR exclusion purposes
+    
+    % Choose frequencies to analyze:
+    analFreqs = stimFreqs; % stimFreqs; % harFreqs; % imFreqs
+    analFreqLabel = stimFreqLabel;
+    
+    % plot a smoothed RLS trace?
+    smoothing = 1;
+    
+elseif strcmp(paramsFlag, 'oscAnal')
+    
+    %% Naive FFT analysis parameters
+    
+    % Choose electrodes to analyze:
+    electrodeSet = focusElectrode; %focusElectrode; %occipitals;
+    snrElecs = focusElectrode.nums; % electrodes used for SNR exclusion purposes
+    
+    % Choose frequencies to analyze:
+    analFreqs = stimFreqs; % stimFreqs; % harFreqs; % imFreqs
+    analFreqLabel = stimFreqLabel;
+    
+    % Use a smoothed RLS trace?
+    smoothing = 0;
+    
+elseif strcmp(paramsFlag, 'transAnal')
+    
+    %% Transition plotting parameters
+    
+    % Choose electrodes to analyze:
+    electrodeSet = focusElectrode; %focusElectrode; %occipitals;
+    snrElecs = focusElectrode.nums; % electrodes used for SNR exclusion purposes
+    
+    % Choose frequencies to analyze:
+    analFreqs = stimFreqs; % stimFreqs; % harFreqs; % imFreqs
+    analFreqLabel = stimFreqLabel;
+    
+    % Use a smoothed RLS trace?
+    smoothing = 1;
+    
+    % use sim schedule for simulation trials?
+    useSimSchedule = 1;
+    
+    % length of transition window
+    transHalf = 5; %+/- from the time of the button press %1.5
+    buttonPress = transHalf*512 + 1; % index of button press in transitions
+    
+    % demean? normalize? (does not include normalizing to sim trials)
+    normType = 'mean'; %'noStimBase'; %'freqWin'; % or 'z' or 'none' or 'norm' or 'mean'
+    blineLoc = 'trial'; % or 'preStim' or 'postStim' or 'trial' (other freqs during the trial)
+    
+elseif strcmp(paramsFlag, 'peakAnal')
+    
+    %% Peak plotting parameters
+    
+    % Choose electrodes to analyze:
+    electrodeSet = occipitals; %focusElectrode; %occipitals;
+    snrElecs = focusElectrode.nums; % electrodes used for SNR exclusion purposes
+    
+    % Choose frequencies to analyze:
+    analFreqs = stimFreqs; % stimFreqs; % harFreqs; % imFreqs
+    analFreqLabel = stimFreqLabel;
+    
+    % Use a smoothed RLS trace?
+    smoothing = 1;
+    
+    % pick peaks without relying on perceptual report?
+    blindPeak = 0;
+    
+    % alternate (simplistic) peak analysis? Just choose the midpoint between
+    % start and end of dominant state (according to perceptual report)
+    altPeak = 0;
+    
+    peakHalf = 5; % in seconds, +/- around peak
+    minPkInstances = 5;
+    
+elseif strcmp(paramsFlag, 'parPlot')
+    
+    %% Participant plotting parameters
+    
+    % Choose electrodes to analyze:
+    electrodeSet = focusElectrode; %focusElectrode; %occipitals;
+    snrElecs = focusElectrode.nums; % electrodes used for SNR exclusion purposes
+    
+    % Choose frequencies to analyze:
+    analFreqs = stimFreqs; % stimFreqs; % harFreqs; % imFreqs
+    analFreqLabel = stimFreqLabel;
+    
+    % Use a smoothed RLS trace?
+    smoothing = 1;
+    
+    % use sim schedule for simulation trials?
+    useSimSchedule = 1;
+    
+    % demean? normalize? (does not include normalizing to sim trials)
+    normType = 'mean'; %'noStimBase'; %'freqWin'; % or 'z' or 'none' or 'norm' or 'mean'
+    blineLoc = 'trial'; % or 'preStim' or 'postStim' or 'trial' (other freqs during the trial)
+    
+    % minimum instances to create an individual transition or peak plot
+    minInstances = 5;
+    
+    %% Transition settings
+    
+    % Time requirements for consideration in transition analysis
+    dom1Min = 0.5; %0.5 %1.25; %cutoff for shortest dominant state to be included
+    dom1Max = inf;
+    dom2Min = 0.5; %0.5 %cutoff for shortest dominant state to be included
+    dom2Max = inf;
+    mixedMin = 0; %.2 %1;
+    mixedMax = inf; %.75
+    noMixed = 0; % if this is 1, do not include transitions with a mixed component
+    gapMax = 0.25; % max time allowed between button-reported states
+    
+    % length of transition window
+    transHalf = 5; %+/- from the time of the button press %1.5
+    buttonPress = transHalf*512 + 1; % index of button press in transitions
+    
+    %% Peak settings
+    
+    % peak width limits
+    maxPwidth = 5;
+    minPwidth = 1;
+    
+     % pick peaks without relying on perceptual report?
+    blindPeak = 0;
+    
+    % alternate (simplistic) peak analysis? Just choose the midpoint between
+    % start and end of dominant state (according to perceptual report)
+    altPeak = 0;
+    
+    peakHalf = 5; % in seconds, +/- around peak
+    minPkInstances = 5;
+    
+elseif strcmp(paramsFlag, 'ampClust')
+    
+    %% Amplitude clustering parameters
+    
+    % Choose electrodes to analyze:
+    electrodeSet = focusElectrode; %focusElectrode; %occipitals;
+    snrElecs = focusElectrode.nums; % electrodes used for SNR exclusion purposes
+    
+    % Choose frequencies to analyze:
+    analFreqs = stimFreqs; % stimFreqs; % harFreqs; % imFreqs
+    analFreqLabel = stimFreqLabel;
+    
+    % Use smoothed RLS?
+    smoothing = 1;
+    
+    latency = round(.8*sampRate); % predicted latency in data points
+    segFrac = 1; % proportion of epoch used for amplitude clustering
+    
+elseif strcmp(paramsFlag, 'mlAnal')
+    
+    %% Machine Learning Parameters
+    
+    % Features    
+    amp = 1; % amplitude
+    d1dt = 1; % 1st derivative
+    d2dt = 1; % 2nd derivative
+    % frequencies
+    freqTypes = {'principles' 'harmonics' 'im'}; % 'harmonics' 'im'}; %{'principles' 'harmonics' 'im'};    
+    % channels
+    channels = occipitals.nums; %occipitals.nums; %focusElectrode.nums;
+    
+    % transition timecourse parameters
+    svmTransHalf = 3;
+    
+    % use sim
+    
+end

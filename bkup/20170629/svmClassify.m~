@@ -1,0 +1,316 @@
+% Uses classifier to...
+% uses Matlab's SVM toolbox
+
+loadPaths % add dependency folders to path
+
+clearvars
+
+tic
+
+% load parameters
+analysisParams
+
+%% Specify training and testing sets
+
+trainSet = 'sim';
+% 'sim' 'rivalry' 'rivalTransitions' 'simTransitions'
+testSet = 'rivalTransitions';
+% 'identical' 'subset' 'rivalSegs' 'rivalTransitions' 'simTransitions'
+
+%% Specify features
+
+% specify features in the last section of analysisParams.m
+
+%% Segment parameters
+
+% participant to test
+%parName = 'stratus137';
+%latency = round(.8*sampRate); % predicted latency in data points % USING SIM SCHEDULE, no latency needed
+segTime = 0.5; %0.5; % s
+%binTime = 0.01; % time bin (s) % determines the resolution of the data used for the classification
+% Optimally, segTime should be a multiple of intTime
+
+segPoints = round(segTime*sampRate); % segment length in data points (each segment is a "trial" to be classified)
+%binPoints = round(intTime*sampRate); % time bin length in data points
+
+% specify middle of segment: number of seconds after beginning of epoch
+% but if segMiddle > length of segment, just sets segMiddle at end of segment
+if strcmp(trainSet, 'sim')
+    segMiddles = 0.25:0.05:0.75; % try different segMiddles for sim segments
+    trTime = 0.25:0.05:0.75; % time (s) before end of epoch
+end
+
+% different segments are optimal for simulation and rivalry trials
+if strcmp(trainSet, 'rivalry')
+    segMiddle = 0.5;
+else
+    segMiddle = 0.25;
+end
+
+%% TRAINING timecourse parameters
+if ~isempty(strfind(trainSet, 'Transitions'))
+    binSize = 0.5; % testing bin size in seconds
+    binPts = round(binSize*sampRate); % number of points in a testing bin
+    
+    % cut the same amount off either end
+    totalTPoints = sampRate*svmTransHalf*2 + 1; % total # points in a transition
+    extra = mod(totalTPoints, binPts);
+    firstPt = floor(extra / 2)+1;
+    lastPt = totalTPoints - ceil(extra / 2);
+    
+    % set start and end points of bins
+    thPoint = 1; % test on every th time point
+    %trStartPts = firstPt:binPts*thPoint:lastPt;
+    trStartPts = 2298; %[2300 2813]; % TEMP for testing
+    trEndPts = trStartPts + binPts - 1;
+    
+    % training time axis
+    trTime = (1:length(trStartPts)) - ceil(length(trStartPts)/2); % in data points
+    trTime = trTime * binSize*thPoint; % in seconds
+    
+else
+     trStartPts = NaN;
+     trEndPts = NaN;
+%     trTime = NaN;
+end
+
+%% TESTING timecourse parameters
+if ~isempty(strfind(testSet, 'Transitions'))
+    binSize = 0.5; % testing bin size in seconds
+    binPts = round(binSize*sampRate); % number of points in a testing bin
+    
+    % cut the same amount off either end
+    totalTPoints = sampRate*svmTransHalf*2 + 1; % total # points in a transition
+    extra = mod(totalTPoints, binPts);
+    firstPt = sampRate*(transHalf - svmTransHalf) + floor(extra / 2)+1;
+    lastPt = sampRate*(transHalf-svmTransHalf) + 1 + totalTPoints - ceil(extra / 2);
+    
+    % set start and end points of bins
+    thPoint = 1; % test on every th time point
+    teStartPts = firstPt:binPts*thPoint:lastPt;
+    %teStartPts = 2298; %[2300 2813]; %[1790 2433]; % TEMP for testing
+    teEndPts = teStartPts + binPts - 1;
+
+    % testing time axis
+    teTime = (1:length(teStartPts)) - ceil(length(teStartPts)/2); % in data points
+    teTime = teTime * binSize*thPoint; % in seconds
+    
+else
+    teStartPts = NaN;
+    teEndPts = NaN;
+    teTime = NaN;
+end
+
+%% Iterate through training time course
+
+% space to store accuracies for each training and testing bin
+airplaneMat = nan(length(trStartPts), length(teStartPts)); 
+
+trMsglength = 0;
+teMsglength = 0;
+parMsglength = 0;
+
+%for iTrBin = 1:length(trStartPts)
+%     trStartPt = trStartPts(iTrBin);
+%     trEndPt = trEndPts(iTrBin);
+for segMiddle = segMiddles % try different segMiddles for sim segments
+    
+    fprintf(repmat('\b',1,trMsglength + teMsglength + parMsglength));
+    msg = sprintf('Running training timepoint %d of %d\n', iTrBin, length(trStartPts));
+    fprintf(msg);
+    trMsglength = numel(msg);
+    
+    %% Iterate through testing time course
+    
+     % space to store accuracies of each testing point (for just this training bin)
+    accuracyMat = nan(length(parNums), length(teStartPts));
+    % delete stored accuracies from previous runs 
+    %delete('ML/trPt_accMatrices/*.mat')
+    
+    teMsglength = 0;
+    parMsglength = 0;
+    
+    for iBin = 1:length(teStartPts)
+        if iBin == 5
+            disp('hi')
+        end
+        teStartPt = teStartPts(iBin);
+        teEndPt = teEndPts(iBin);
+        
+        fprintf(repmat('\b',1,teMsglength + parMsglength));
+        teMsg = sprintf('Running testing timepoint %d of %d\n', iBin, length(teStartPts));
+        fprintf(teMsg);
+        teMsglength = numel(teMsg);
+        
+        accuracies = nan(length(parNums), 1);
+        
+        parMsglength = 0;
+        
+        %% Iterate through participants
+        
+        for iPar = 1:length(parNums)
+            
+            fprintf(repmat('\b',1,parMsglength));
+            parMsg = sprintf('Running participant %d of %d\n', iPar, length(parNums));
+            fprintf(parMsg);
+            parMsglength = numel(parMsg);
+            
+            %% Participant-specific set-up
+            
+            numFormat = '%02d';
+            parName = [group num2str(parNums(iPar), numFormat)];
+            
+            % Get EEG file info
+            EEGfiles = dir([eegDir parName '*']);
+            % ...if the participant exists...
+            if isempty(EEGfiles)
+                continue;
+            end
+            
+            %         fprintf(repmat('\b',1,msglength));
+            %         msg = sprintf('Running %s timepoint %d of %d\n', parName, iBin, length(startPts));
+            %         fprintf(msg);
+            %         msglength = numel(msg);
+            
+            %% Create matrices of training and test data
+            
+            [trainingData, testData, trainingLabels, testLabels] = makeSVMmatrices(parName, segPoints, trainSet, testSet, segMiddle, trStartPt, trEndPt, teStartPt, teEndPt, rivLat);
+            
+            % SNR not high enough; skip this participant
+            if isempty(trainingData) || isempty(testData)
+                continue;
+            end
+            
+            %% Train the classifier
+            
+            SVMModel = fitcsvm(trainingData, trainingLabels, 'KernelFunction', 'linear', 'Standardize', true, 'ClassNames', {'lo','hi'});
+            
+            %SVMModel = fitcsvm(trainingData, trainingLabels, 'KernelFunction', 'rbf', 'BoxConstraint', 1, 'Standardize', true, 'ClassNames', {'lo','hi'});
+            
+            %SVMModel = fitcsvm(trainingData, trainingLabels);
+            %%
+            %         %% Visualize the training dataset (if we only have 2 dimensions)
+            %
+            %             sv = SVMModel.SupportVectors;
+            %             figure
+            %             gscatter(trainingData(:,1),trainingData(:,2),trainingLabels,[],[],[],'on')
+            %             hold on
+            %             %plot(sv(:,1),sv(:,2),'ko','MarkerSize',10) % only works if we don't standardize before training
+            %             %legend('low dominant','high dominant') %,'support vector')
+            %             title(['Training on ' trainSet ': ' parName '    .']);
+            %             hold off
+            %
+            %         %% Visualize the testing dataset (if we only have 2 dimensions)
+            %
+            %         sv = SVMModel.SupportVectors;
+            %         figure
+            %         hiOrLo = find(strcmp(testLabels, 'hi') | strcmp(testLabels, 'lo'));
+            %         gscatter(testData(hiOrLo,1),testData(hiOrLo,2),testLabels(hiOrLo),[],[],[],'on')
+            %         hold on
+            %         %plot(sv(:,1),sv(:,2),'ko','MarkerSize',10) % only works if we don't standardize before training
+            %         %legend('low dominant','high dominant') %,'support vector')
+            %         title(['Testing on ' testSet ': ' parName '    .']);
+            %         hold off
+            
+            %% Classify test data
+            
+            [classedLabels, score] = predict(SVMModel, testData);
+            
+            %% Check classifications
+            
+            correct = nan(length(testLabels),1);
+            for i = 1:length(testLabels)
+                
+                %             if ~strcmp(testLabels(i), 'mi') && ~isempty(testLabels{i}) % ignore mixed states for the moment, bins with multiple states
+                %                 correct(i) = strcmp(testLabels(i), classedLabels(i));
+                %             end
+                
+                % ignore mixed states for the moment, bins with multiple states
+                if strcmp(testLabels(i), 'hi') || strcmp(testLabels(i), 'lo')
+                    correct(i) = strcmp(testLabels(i), classedLabels(i));
+                end
+            end
+            accuracies(iPar) = nanmean(correct);
+            
+            %% Store accuracies and classifications for each time point (for transition time course)
+            
+            if strfind(testSet, 'Transitions') 
+                accuracyMat(iPar, iBin) = nanmean(correct);
+                classedInNums = nan(length(classedLabels), 1);
+                classedInNums(strcmp(classedLabels, 'hi')) = 1;
+                classedInNums(strcmp(classedLabels, 'lo')) = -1;
+                classMat(iPar, iBin) = nanmean(classedInNums);
+            end
+        end
+    end
+    
+    if strfind(testSet, 'Transitions')
+        
+        % save accuracy matrix for this training bin
+        save(['ML/trPt_accMatrices/' group '_train-' trainSet '_test-' testSet '_' num2str(size(testData, 2)) 'features_trainPt' num2str(iTrBin)], 'accuracyMat', 'teTime')
+        
+        %plot time courses
+        % Classifications
+        %    figure
+        %    plot(time, nanmean(classMat, 1));
+        %    ylabel('average classification')
+        %    vline(0);
+        % Accuracies
+                
+        %% Plot shaded error classification timecourses
+        figure
+        %plot(teTime, nanmean(accuracyMat, 1));
+        ylabel('accuracy')
+        vline(0);
+
+        x=teTime;
+        %y=num2cell(accuracyMat,2);
+        y=accuracyMat;
+
+        clear g
+        g(1,1)=gramm('x',x,'y',y);
+        g(1,2)=gramm('x',x,'y',y);
+
+        g(1,1).geom_line();
+        g(1,1).set_title('Individual Classification Accuracies');
+        %g(1,1).set_color_options('map','matlab'); %It is also possible to provide a custom
+        % colormap by providing a N-by-3 matrix (columns are R,G,B).
+
+        g(1,2).stat_summary('type','sem','setylim',false);
+        g(1,2).set_title('Group Averaged Accuracies');
+
+        g.set_title('Classification accuracies...');
+
+        figure('Position',[100 100 800 550]);
+        g.draw();
+        
+        % record average accuracy for this training bin
+        airplaneMat(iTrBin,:) = nanmean(accuracyMat, 1);
+        
+    else
+        
+        % save accuracies
+        save(['ML/segAccs/' group '_train-' trainSet '_test-' testSet '_' num2str(size(testData, 2)) 'features'], 'accuracies')
+        
+        disp(['group: ' group])
+        %disp(['time after epoch start: ' num2str(segMiddle) ' s'])
+        disp(['mean: ' num2str(nanmean(accuracies))])
+        disp(['median: ' num2str(nanmedian(accuracies))])
+        disp(['min: ' num2str(nanmin(accuracies))])
+        disp(['max: ' num2str(nanmax(accuracies))])
+        disp(['']);
+        
+        figure
+        histogram(accuracies, 15);
+        xlabel('accuracy')
+        
+        % record average accuracy for this training bin
+        airplaneMat(iTrBin,:) = nanmean(accuracies, 1);       
+    end
+end
+
+% save airplane matrix (Each row is a training time point, each column is a testing time point)
+save(['ML/airplaneMats/' group '_train-' trainSet '_test-' testSet '_' num2str(size(testData, 2)) 'features'], 'airplaneMat', 'trTime','teTime')
+
+toc
+%end

@@ -1,0 +1,5 @@
+1 '2frame-simulation' 14.166 17 4 30
+2 '2frame-rivalry' 17 21.25 8 30
+3 '2frame-simulation' 14.166 17 8 30
+4 '2frame-rivalry' 14.166 17 8 30
+5 '2frame-rivalry' 14.166 17 8 30

@@ -1,0 +1,5 @@
+1 ‘rivalry-run1’ 14.166 17 8 33
+2 ‘rivalry-run2’ 14.166 17 4 33
+3 ‘simulation’ 14.166 17 8 33
+4 ‘onsets-run1’ 14.166 17 16 5
+5 ‘onsets-run2’ 14.166 17 16 5

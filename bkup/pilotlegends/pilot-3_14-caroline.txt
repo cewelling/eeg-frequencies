@@ -1,0 +1,11 @@
+1 'mono-check' 21.25 21 4 30
+2 'rival-check' 21.25 21.25 4 20
+3 'rival-check' 21.25 28 4 30
+4 'rival-check' 17 17 4 30
+5 'rival-check' 17 17 4 30
+6 'rival-check' 17 21.25 4 30
+7 'rival-check' 17 28 4 30
+8 'rival-img' 17 21.25 4 30
+9 'rival-img' 17 21.25 6 30
+10 'rival-check' 17 21.25 6 45
+11 'rival-check' 17 21.25 2 45
